@@ -11,6 +11,7 @@ using Robust.Shared.Log;
 using Robust.Shared.Asynchronous;
 using Robust.Shared.Reflection;
 using Robust.Shared.Utility;
+using Robust.Shared.JR;
 
 namespace Robust.Server
 {
@@ -45,6 +46,7 @@ namespace Robust.Server
         private static void ParsedMain(CommandLineArgs args, bool contentStart, ServerOptions options)
         {
             ServerWarmup.RunWarmup();
+
 
             Thread.CurrentThread.Name = "Main Thread";
             var deps = IoCManager.InitThread();

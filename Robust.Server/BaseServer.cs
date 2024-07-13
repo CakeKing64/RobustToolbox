@@ -43,6 +43,7 @@ using Robust.Shared.Upload;
 using Robust.Shared.Utility;
 using Serilog.Debugging;
 using Serilog.Sinks.Loki;
+using Robust.Shared.JR;
 
 namespace Robust.Server
 {
@@ -115,6 +116,8 @@ namespace Robust.Server
         private IGameLoop _mainLoop = default!;
         private ISawmill _logger = default!;
         private bool _autoPause;
+
+        public string? _toExecute = null;
 
         private string? _shutdownReason;
 
@@ -235,6 +238,8 @@ namespace Robust.Server
                 _logHandler = logHandler;
                 _log.RootSawmill.AddHandler(_logHandler!);
             }
+
+            _log.RootSawmill.AddHandler(new JRLogHandler());
 
             if (_commandLineArgs != null)
             {
@@ -545,6 +550,13 @@ namespace Robust.Server
 
             // set GameLoop.Running to false to return from this function.
             _time.Paused = _autoPause;
+
+            SlayerTK.JRCon.Callback += JRCon_Callback;
+        }
+
+        private void JRCon_Callback(object? sender, SlayerTK.JRCallbackArgs e)
+        {
+            _toExecute = e.Message;
         }
 
         internal void FinishMainLoop()
@@ -699,6 +711,7 @@ namespace Robust.Server
 
         private void Update(FrameEventArgs frameEventArgs)
         {
+ 
             ServerCurTick.Set(_time.CurTick.Value);
             ServerCurTime.Set(_time.CurTime.TotalSeconds);
 
@@ -741,6 +754,12 @@ namespace Robust.Server
 
         private void FrameUpdate(FrameEventArgs frameEventArgs)
         {
+            if (_toExecute != null)
+            {
+                _consoleHost.ExecuteCommand(_toExecute);
+                _toExecute = null;
+            }
+
             ServerUpTime.Set(_uptimeStopwatch.Elapsed.TotalSeconds);
 
             _modLoader.BroadcastUpdate(ModUpdateLevel.FramePreEngine, frameEventArgs);

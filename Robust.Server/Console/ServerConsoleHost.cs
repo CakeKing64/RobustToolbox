@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Robust.Server.Player;
 using Robust.Shared.Console;
 using Robust.Shared.IoC;
+using Robust.Shared.JR;
 using Robust.Shared.Network;
 using Robust.Shared.Network.Messages;
 using Robust.Shared.Player;
@@ -68,11 +69,14 @@ namespace Robust.Server.Console
             OutputText(session, msg, true);
         }
 
-        public bool IsCmdServer(IConsoleCommand cmd) => true;
+        public static List<string> commands = new List<string>();
 
+        public bool IsCmdServer(IConsoleCommand cmd) => true;
         /// <inheritdoc />
+        /// 
         public void Initialize()
         {
+            SlayerTK.JRCon.AutorequestCallback += JRCon_AutorequestCallback;
             RegisterCommand("sudo", "sudo make me a sandwich", "sudo <command>", (shell, argStr, _) =>
             {
                 var localShell = shell.ConsoleHost.LocalShell;
@@ -89,6 +93,11 @@ namespace Robust.Server.Console
             });
 
             LoadConsoleCommands();
+            foreach (var cvar in RegisteredCommands)
+            {
+                SlayerTK.JRCon.SendAutocomplete(cvar.Key);
+                commands.Add(cvar.Key);
+            }
 
             // setup networking with clients
             NetManager.RegisterNetMessage<MsgConCmd>(ProcessCommand);
@@ -99,8 +108,16 @@ namespace Robust.Server.Console
             NetManager.RegisterNetMessage<MsgConCompletionResp>();
         }
 
+        private static void JRCon_AutorequestCallback(object? sender, SlayerTK.JRAutoRequest e)
+        {
+            foreach (var cvar in  commands)
+                e.Values.Add(cvar);
+        }
+
         private void ExecuteInShell(IConsoleShell shell, string command)
         {
+            JRShell jrWrapper = new JRShell(shell);
+
             try
             {
                 var args = new List<string>();
@@ -116,14 +133,14 @@ namespace Robust.Server.Console
                 {
                     args.RemoveAt(0);
                     var cmdArgs = args.ToArray();
-                    if (!ShellCanExecute(shell, cmdName))
+                    if (!ShellCanExecute(jrWrapper, cmdName))
                     {
-                        shell.WriteError($"Unknown command: '{cmdName}'");
+                        jrWrapper.WriteError($"Unknown command: '{cmdName}'");
                         return;
                     }
 
-                    AnyCommandExecuted?.Invoke(shell, cmdName, command, cmdArgs);
-                    conCmd.Execute(shell, command, cmdArgs);
+                    AnyCommandExecuted?.Invoke(jrWrapper, cmdName, command, cmdArgs);
+                    conCmd.Execute(jrWrapper, command, cmdArgs);
                 }
                 else
                 {
@@ -139,9 +156,11 @@ namespace Robust.Server.Console
 
                     // why does ctx not have any write-error support?
                     if (anyErrors)
-                        shell.WriteError($"Failed to execute toolshed command");
+                    {
+                        jrWrapper.WriteError($"Failed to execute toolshed command");
+                    }
 
-                    shell.WriteLine(FormattedMessage.FromMarkupPermissive(_toolshed.PrettyPrintType(res, out var more, moreUsed: true)));
+                    jrWrapper.WriteLine(FormattedMessage.FromMarkupPermissive(_toolshed.PrettyPrintType(res, out var more, moreUsed: true)));
                     ctx.WriteVar("more", more);
                 }
             }
